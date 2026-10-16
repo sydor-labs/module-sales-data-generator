@@ -1,0 +1,51 @@
+{
+    "perspective_sales_data_generator_job": {
+        "column": {
+            "job_id": true,
+            "status": true,
+            "parameters": true,
+            "plan": true,
+            "customer_ids": true,
+            "customers_total": true,
+            "customers_done": true,
+            "orders_total": true,
+            "orders_done": true,
+            "orders_failed": true,
+            "summary": true,
+            "error": true,
+            "resume_count": true,
+            "heartbeat_at": true,
+            "created_at": true,
+            "updated_at": true,
+            "finished_at": true
+        },
+        "index": {
+            "PERSPECTIVE_SALES_DATA_GENERATOR_JOB_STATUS": true
+        },
+        "constraint": {
+            "PRIMARY": true
+        }
+    },
+    "perspective_sales_data_generator_segment": {
+        "column": {
+            "segment_id": true,
+            "job_id": true,
+            "type": true,
+            "day": true,
+            "planned_count": true,
+            "first_position": true,
+            "done_count": true,
+            "failed_count": true,
+            "summary": true,
+            "start_entity_id": true
+        },
+        "index": {
+            "PERSPECTIVE_SALES_DATA_GENERATOR_SEGMENT_JOB_ID_DAY_TYPE": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "FK_3D7FF347A06DAA8C4331C96FCE3AF56C": true,
+            "PERSPECTIVE_SALES_DATA_GENERATOR_SEGMENT_JOB_ID_TYPE_DAY": true
+        }
+    }
+}

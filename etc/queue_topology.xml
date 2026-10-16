@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework-message-queue:etc/topology.xsd">
+    <exchange name="magento" type="topic" connection="amqp">
+        <binding id="perspectiveSalesDataGeneratorBatch" topic="perspective.sales_data_generator.batch"
+                 destinationType="queue" destination="perspective.sales_data_generator.batch"/>
+    </exchange>
+</config>

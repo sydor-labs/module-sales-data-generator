@@ -1,0 +1,248 @@
+<?php
+/**
+ * @var \Magento\Backend\Block\Template $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+
+use Perspective\SalesDataGenerator\Model\Job;
+use Perspective\SalesDataGenerator\Model\Job\Parameters;
+
+/** @var \Perspective\SalesDataGenerator\ViewModel\GeneratePage $viewModel */
+$viewModel = $block->getData('view_model');
+$values = $viewModel->getFormValues();
+$jobs = $viewModel->getJobs();
+?>
+<form action="<?= $escaper->escapeUrl($viewModel->getSaveUrl()) ?>" method="post"
+      data-mage-init='{"validation": {}}'>
+    <input name="form_key" type="hidden" value="<?= $escaper->escapeHtmlAttr($block->getFormKey()) ?>"/>
+    <fieldset class="admin__fieldset">
+        <legend class="admin__legend"><span><?= $escaper->escapeHtml(__('Generation Options')) ?></span></legend>
+
+        <div class="admin__field">
+            <label class="admin__field-label" for="sdg-customers">
+                <span><?= $escaper->escapeHtml(__('Customers')) ?></span>
+            </label>
+            <div class="admin__field-control">
+                <input id="sdg-customers" name="<?= /* @noEscape */ Parameters::CUSTOMERS ?>" type="number" min="0"
+                       class="admin__control-text validate-digits"
+                       value="<?= $escaper->escapeHtmlAttr($values[Parameters::CUSTOMERS]) ?>"/>
+                <div class="admin__field-note"><?= $escaper->escapeHtml(__('Customers to register.')) ?></div>
+            </div>
+        </div>
+
+        <div class="admin__field _required">
+            <label class="admin__field-label" for="sdg-guest-ratio">
+                <span><?= $escaper->escapeHtml(__('Guest Order Share')) ?></span>
+            </label>
+            <div class="admin__field-control">
+                <input id="sdg-guest-ratio" name="<?= /* @noEscape */ Parameters::GUEST_RATIO ?>" type="number"
+                       min="0" max="1" step="0.01"
+                       class="admin__control-text required-entry validate-number-range number-range-0-1"
+                       value="<?= $escaper->escapeHtmlAttr($values[Parameters::GUEST_RATIO]) ?>"/>
+                <div class="admin__field-note"><?= $escaper->escapeHtml(__('From 0 to 1.')) ?></div>
+            </div>
+        </div>
+
+        <div class="admin__field">
+            <label class="admin__field-label" for="sdg-categories">
+                <span><?= $escaper->escapeHtml(__('Categories')) ?></span>
+            </label>
+            <div class="admin__field-control">
+                <input id="sdg-categories" name="<?= /* @noEscape */ Parameters::CATEGORIES ?>" type="number"
+                       min="0" class="admin__control-text validate-digits"
+                       value="<?= $escaper->escapeHtmlAttr($values[Parameters::CATEGORIES]) ?>"/>
+                <div class="admin__field-note">
+                    <?= $escaper->escapeHtml(__('Categories to create under the store root category first.')) ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="admin__field">
+            <label class="admin__field-label" for="sdg-products">
+                <span><?= $escaper->escapeHtml(__('Products')) ?></span>
+            </label>
+            <div class="admin__field-control">
+                <input id="sdg-products" name="<?= /* @noEscape */ Parameters::PRODUCTS ?>" type="number" min="0"
+                       class="admin__control-text validate-digits"
+                       value="<?= $escaper->escapeHtmlAttr($values[Parameters::PRODUCTS]) ?>"/>
+                <div class="admin__field-note">
+                    <?= $escaper->escapeHtml(__('Simple products to create in those categories before any order.')) ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="admin__field">
+            <label class="admin__field-label" for="sdg-orders">
+                <span><?= $escaper->escapeHtml(__('Orders')) ?></span>
+            </label>
+            <div class="admin__field-control">
+                <input id="sdg-orders" name="<?= /* @noEscape */ Parameters::ORDERS ?>" type="number" min="0"
+                       class="admin__control-text validate-digits"
+                       value="<?= $escaper->escapeHtmlAttr($values[Parameters::ORDERS]) ?>"/>
+                <div class="admin__field-note"><?= $escaper->escapeHtml(__('Orders to place.')) ?></div>
+            </div>
+        </div>
+
+        <div class="admin__field _required">
+            <label class="admin__field-label" for="sdg-from">
+                <span><?= $escaper->escapeHtml(__('From')) ?></span>
+            </label>
+            <div class="admin__field-control">
+                <input id="sdg-from" name="<?= /* @noEscape */ Parameters::FROM ?>" type="date"
+                       class="admin__control-text required-entry"
+                       value="<?= $escaper->escapeHtmlAttr($values[Parameters::FROM]) ?>"/>
+            </div>
+        </div>
+
+        <div class="admin__field _required">
+            <label class="admin__field-label" for="sdg-to">
+                <span><?= $escaper->escapeHtml(__('To')) ?></span>
+            </label>
+            <div class="admin__field-control">
+                <input id="sdg-to" name="<?= /* @noEscape */ Parameters::TO ?>" type="date"
+                       class="admin__control-text required-entry"
+                       value="<?= $escaper->escapeHtmlAttr($values[Parameters::TO]) ?>"/>
+                <div class="admin__field-note">
+                    <?= $escaper->escapeHtml(__('Days in the store timezone. Times after now are not used.')) ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="admin__field _required">
+            <label class="admin__field-label" for="sdg-store">
+                <span><?= $escaper->escapeHtml(__('Store View')) ?></span>
+            </label>
+            <div class="admin__field-control">
+                <select id="sdg-store" name="<?= /* @noEscape */ Parameters::STORE ?>" class="admin__control-select">
+                    <?php foreach ($viewModel->getStoreOptions() as $storeId => $label): ?>
+                        <option value="<?= (int)$storeId ?>"
+                            <?= (int)$values[Parameters::STORE] === $storeId ? 'selected="selected"' : '' ?>>
+                            <?= $escaper->escapeHtml($label) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+
+        <div class="admin__field">
+            <label class="admin__field-label" for="sdg-seed">
+                <span><?= $escaper->escapeHtml(__('Random Seed')) ?></span>
+            </label>
+            <div class="admin__field-control">
+                <input id="sdg-seed" name="<?= /* @noEscape */ Parameters::SEED ?>" type="number" min="0"
+                       class="admin__control-text validate-digits"
+                       value="<?= $escaper->escapeHtmlAttr($values[Parameters::SEED]) ?>"/>
+                <div class="admin__field-note">
+                    <?= $escaper->escapeHtml(__('Optional. The same seed and store data give the same result.')) ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="admin__field">
+            <div class="admin__field-control">
+                <input id="sdg-skip-statistics" name="<?= /* @noEscape */ Parameters::SKIP_STATISTICS ?>"
+                       type="checkbox" value="1" class="admin__control-checkbox"
+                    <?= $values[Parameters::SKIP_STATISTICS] ? 'checked="checked"' : '' ?>/>
+                <label class="admin__field-label" for="sdg-skip-statistics">
+                    <?= $escaper->escapeHtml(__('Do not refresh report statistics afterwards')) ?>
+                </label>
+            </div>
+        </div>
+
+        <div class="admin__field">
+            <div class="admin__field-control">
+                <button type="submit" class="action-primary">
+                    <span><?= $escaper->escapeHtml(__('Generate')) ?></span>
+                </button>
+                <div class="admin__field-note">
+                    <?= $escaper->escapeHtml(__(
+                        'The job runs in batches through the message queue. Start the consumer with: %1',
+                        $viewModel->getConsumerCommand()
+                    )) ?>
+                </div>
+            </div>
+        </div>
+    </fieldset>
+</form>
+
+<div class="admin__fieldset-wrapper">
+    <div class="admin__fieldset-wrapper-title">
+        <strong class="title"><span><?= $escaper->escapeHtml(__('Recent Jobs')) ?></span></strong>
+    </div>
+    <?php if (!$jobs): ?>
+        <p><?= $escaper->escapeHtml(__('No jobs yet.')) ?></p>
+    <?php else: ?>
+        <p><a href=""><?= $escaper->escapeHtml(__('Refresh')) ?></a></p>
+        <table class="data-grid">
+            <thead>
+            <tr>
+                <th class="data-grid-th"><?= $escaper->escapeHtml(__('Job')) ?></th>
+                <th class="data-grid-th"><?= $escaper->escapeHtml(__('Created')) ?></th>
+                <th class="data-grid-th"><?= $escaper->escapeHtml(__('Status')) ?></th>
+                <th class="data-grid-th"><?= $escaper->escapeHtml(__('Progress')) ?></th>
+                <th class="data-grid-th"><?= $escaper->escapeHtml(__('Catalog')) ?></th>
+                <th class="data-grid-th"><?= $escaper->escapeHtml(__('Customers')) ?></th>
+                <th class="data-grid-th"><?= $escaper->escapeHtml(__('Orders')) ?></th>
+                <th class="data-grid-th"><?= $escaper->escapeHtml(__('Order Statuses')) ?></th>
+                <th class="data-grid-th"><?= $escaper->escapeHtml(__('Action')) ?></th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($jobs as $job): ?>
+                <tr>
+                    <td>#<?= (int)$job['id'] ?></td>
+                    <td><?= $escaper->escapeHtml($job['created_at']) ?></td>
+                    <td>
+                        <?php if ($job['stalled']): ?>
+                            <span class="grid-severity-major">
+                                <span><?= $escaper->escapeHtml(__('stalled')) ?></span>
+                            </span>
+                        <?php elseif ($job['status'] === Job::STATUS_FAILED): ?>
+                            <span class="grid-severity-critical">
+                                <span><?= $escaper->escapeHtml(__('failed')) ?></span>
+                            </span>
+                        <?php elseif ($job['status'] === Job::STATUS_DONE): ?>
+                            <span class="grid-severity-notice">
+                                <span><?= $escaper->escapeHtml(__('done')) ?></span>
+                            </span>
+                        <?php else: ?>
+                            <span class="grid-severity-minor">
+                                <span><?= $escaper->escapeHtml(__($job['status'])) ?></span>
+                            </span>
+                        <?php endif; ?>
+                        <?php if ($job['error'] !== ''): ?>
+                            <div class="admin__field-error"><?= $escaper->escapeHtml($job['error']) ?></div>
+                        <?php endif; ?>
+                    </td>
+                    <td><?= (int)$job['percent'] ?>%</td>
+                    <td><?= $escaper->escapeHtml($job['catalog']) ?></td>
+                    <td><?= $escaper->escapeHtml($job['customers']) ?></td>
+                    <td>
+                        <?= $escaper->escapeHtml($job['orders']) ?>
+                        <?php if ($job['failed'] > 0): ?>
+                            <br/><?= $escaper->escapeHtml(__('%1 failed', $job['failed'])) ?>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php foreach ($job['statuses'] as $status => $count): ?>
+                            <?= $escaper->escapeHtml($status) ?>: <?= (int)$count ?><br/>
+                        <?php endforeach; ?>
+                    </td>
+                    <td>
+                        <?php if ($job['can_resume']): ?>
+                            <form action="<?= $escaper->escapeUrl($viewModel->getResumeUrl($job['id'])) ?>"
+                                  method="post">
+                                <input name="form_key" type="hidden"
+                                       value="<?= $escaper->escapeHtmlAttr($block->getFormKey()) ?>"/>
+                                <button type="submit" class="action-default">
+                                    <span><?= $escaper->escapeHtml(__('Resume')) ?></span>
+                                </button>
+                            </form>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+</div>

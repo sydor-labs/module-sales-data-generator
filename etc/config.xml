@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+    <default>
+        <sales_data_generator>
+            <orders>
+                <payment_methods>{"checkmo":{"code":"checkmo","weight":"100"}}</payment_methods>
+                <shipping_methods>{"flatrate":{"code":"flatrate_flatrate","weight":"100"}}</shipping_methods>
+                <order_statuses>{"complete":{"code":"complete","weight":"79"},"canceled":{"code":"canceled","weight":"10"},"closed":{"code":"closed","weight":"8"},"processing":{"code":"processing","weight":"3"}}</order_statuses>
+            </orders>
+            <generation>
+                <batch_size>100</batch_size>
+                <workers>1</workers>
+            </generation>
+        </sales_data_generator>
+    </default>
+</config>

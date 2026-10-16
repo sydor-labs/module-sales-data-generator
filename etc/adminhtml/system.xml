@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+        <tab id="perspective" translate="label" class="perspective-tab">
+            <label>Perspective Studio</label>
+        </tab>
+        <section id="sales_data_generator" translate="label" type="text" sortOrder="10" showInDefault="1">
+            <label>Sales Data Generator</label>
+            <tab>perspective</tab>
+            <resource>Perspective_SalesDataGenerator::config</resource>
+            <group id="orders" translate="label comment" type="text" sortOrder="10" showInDefault="1">
+                <label>Generated Orders</label>
+                <comment><![CDATA[Used by <code>bin/magento sales-data:generate</code>. Weights are relative: each row gets weight / sum of weights of the orders.]]></comment>
+                <field id="payment_methods" translate="label comment" sortOrder="10" showInDefault="1"
+                       canRestore="1">
+                    <label>Payment Methods</label>
+                    <frontend_model>Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\PaymentMethods</frontend_model>
+                    <backend_model>Perspective\SalesDataGenerator\Model\Config\Backend\PaymentMethods</backend_model>
+                    <comment>Active offline payment methods. A method not available for an order, e.g. by country or order total, is replaced by another one.</comment>
+                </field>
+                <field id="shipping_methods" translate="label comment" sortOrder="20" showInDefault="1"
+                       canRestore="1">
+                    <label>Shipping Methods</label>
+                    <frontend_model>Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\ShippingMethods</frontend_model>
+                    <backend_model>Perspective\SalesDataGenerator\Model\Config\Backend\ShippingMethods</backend_model>
+                    <comment>Methods of active carriers. A method without a rate for the order address is replaced by another one.</comment>
+                </field>
+                <field id="order_statuses" translate="label comment" sortOrder="30" showInDefault="1"
+                       canRestore="1">
+                    <label>Order Statuses</label>
+                    <frontend_model>Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\OrderStatuses</frontend_model>
+                    <backend_model>Perspective\SalesDataGenerator\Model\Config\Backend\OrderStatuses</backend_model>
+                    <comment>The order state decides the lifecycle: new - placed, on hold - held, processing - invoiced, complete - shipped, closed - refunded, canceled - canceled. Recent orders whose next step would fall in the future keep an earlier state.</comment>
+                </field>
+            </group>
+            <group id="generation" translate="label" type="text" sortOrder="20" showInDefault="1">
+                <label>Generation</label>
+                <field id="batch_size" translate="label comment" type="text" sortOrder="10" showInDefault="1"
+                       canRestore="1">
+                    <label>Batch Size</label>
+                    <validate>required-entry validate-digits validate-greater-than-zero</validate>
+                    <comment>Customers or orders processed per queue message.</comment>
+                </field>
+                <field id="workers" translate="label comment" type="text" sortOrder="15" showInDefault="1"
+                       canRestore="1">
+                    <label>Parallel Workers</label>
+                    <validate>required-entry validate-digits validate-greater-than-zero</validate>
+                    <comment><![CDATA[Message chains started per job. Run as many <code>salesDataGenerator</code> consumers to process them in parallel.]]></comment>
+                </field>
+                <field id="generate" sortOrder="20" showInDefault="1">
+                    <frontend_model>Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\GenerateButton</frontend_model>
+                </field>
+            </group>
+        </section>
+    </system>
+</config>

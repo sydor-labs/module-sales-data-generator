@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Setup/Declaration/Schema/etc/schema.xsd">
+    <table name="perspective_sales_data_generator_job" resource="default" engine="innodb"
+           comment="Sales Data Generator: generation jobs">
+        <column xsi:type="int" name="job_id" unsigned="true" nullable="false" identity="true" comment="Job ID"/>
+        <column xsi:type="varchar" name="status" length="16" nullable="false" default="queued" comment="Job status"/>
+        <column xsi:type="text" name="parameters" nullable="false" comment="Generation parameters"/>
+        <column xsi:type="int" name="customers_total" unsigned="true" nullable="false" default="0"
+                comment="Customers to register"/>
+        <column xsi:type="int" name="orders_total" unsigned="true" nullable="false" default="0"
+                comment="Orders to place"/>
+        <column xsi:type="text" name="summary" nullable="true" comment="Generated orders breakdown"/>
+        <column xsi:type="text" name="error" nullable="true" comment="Last batch error"/>
+        <column xsi:type="smallint" name="resume_count" unsigned="true" nullable="false" default="0"
+                comment="Resumes without progress"/>
+        <column xsi:type="timestamp" name="heartbeat_at" nullable="true" comment="Last progress time"/>
+        <column xsi:type="timestamp" name="created_at" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Creation time"/>
+        <column xsi:type="timestamp" name="updated_at" on_update="true" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Update time"/>
+        <column xsi:type="timestamp" name="finished_at" nullable="true" comment="Finish time"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="job_id"/>
+        </constraint>
+        <index referenceId="PERSPECTIVE_SALES_DATA_GENERATOR_JOB_STATUS" indexType="btree">
+            <column name="status"/>
+        </index>
+    </table>
+    <table name="perspective_sales_data_generator_segment" resource="default" engine="innodb"
+           comment="Sales Data Generator: daily job segments">
+        <column xsi:type="int" name="segment_id" unsigned="true" nullable="false" identity="true"
+                comment="Segment ID"/>
+        <column xsi:type="int" name="job_id" unsigned="true" nullable="false" comment="Job ID"/>
+        <column xsi:type="varchar" name="type" length="8" nullable="false" comment="Customer or order"/>
+        <column xsi:type="date" name="day" nullable="false" comment="Day in store timezone"/>
+        <column xsi:type="int" name="planned_count" unsigned="true" nullable="false" default="0"
+                comment="Entities to create"/>
+        <column xsi:type="int" name="first_position" unsigned="true" nullable="false" default="0"
+                comment="Position of first entity"/>
+        <column xsi:type="int" name="done_count" unsigned="true" nullable="false" default="0"
+                comment="Processed entities"/>
+        <column xsi:type="int" name="failed_count" unsigned="true" nullable="false" default="0"
+                comment="Failed entities"/>
+        <column xsi:type="text" name="summary" nullable="true" comment="Generated orders breakdown"/>
+        <column xsi:type="int" name="start_entity_id" unsigned="true" nullable="true"
+                comment="Max entity ID at start"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="segment_id"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PERSPECTIVE_SDG_SEGMENT_JOB_ID_SDG_JOB_JOB_ID"
+                    table="perspective_sales_data_generator_segment" column="job_id"
+                    referenceTable="perspective_sales_data_generator_job" referenceColumn="job_id" onDelete="CASCADE"/>
+        <constraint xsi:type="unique" referenceId="PERSPECTIVE_SALES_DATA_GENERATOR_SEGMENT_JOB_ID_TYPE_DAY">
+            <column name="job_id"/>
+            <column name="type"/>
+            <column name="day"/>
+        </constraint>
+        <index referenceId="PERSPECTIVE_SALES_DATA_GENERATOR_SEGMENT_JOB_ID_DAY_TYPE" indexType="btree">
+            <column name="job_id"/>
+            <column name="day"/>
+            <column name="type"/>
+        </index>
+    </table>
+</schema>

@@ -1,0 +1,129 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <type name="Magento\Framework\Console\CommandListInterface">
+        <arguments>
+            <argument name="commands" xsi:type="array">
+                <item name="perspectiveSalesDataGenerate" xsi:type="object">Perspective\SalesDataGenerator\Console\Command\GenerateCommand</item>
+                <item name="perspectiveSalesDataResume" xsi:type="object">Perspective\SalesDataGenerator\Console\Command\ResumeCommand</item>
+            </argument>
+        </arguments>
+    </type>
+    <type name="Perspective\SalesDataGenerator\Console\Command\GenerateCommand">
+        <arguments>
+            <argument name="planner" xsi:type="object">Perspective\SalesDataGenerator\Model\Job\Planner\Proxy</argument>
+            <argument name="scheduler" xsi:type="object">Perspective\SalesDataGenerator\Model\Job\Scheduler\Proxy</argument>
+            <argument name="jobRunner" xsi:type="object">Perspective\SalesDataGenerator\Console\JobRunner\Proxy</argument>
+        </arguments>
+    </type>
+    <type name="Perspective\SalesDataGenerator\Console\Command\ResumeCommand">
+        <arguments>
+            <argument name="scheduler" xsi:type="object">Perspective\SalesDataGenerator\Model\Job\Scheduler\Proxy</argument>
+            <argument name="jobRunner" xsi:type="object">Perspective\SalesDataGenerator\Console\JobRunner\Proxy</argument>
+        </arguments>
+    </type>
+    <type name="Magento\CatalogInventory\Model\Configuration">
+        <plugin name="perspective_sales_data_generator_disable_manage_stock"
+                type="Perspective\SalesDataGenerator\Plugin\DisableManageStockPlugin"/>
+    </type>
+    <type name="Magento\Framework\Amqp\QueueFactory">
+        <plugin name="perspective_sales_data_generator_single_message_prefetch"
+                type="Perspective\SalesDataGenerator\Plugin\SingleMessagePrefetchPlugin"/>
+    </type>
+    <type name="Perspective\SalesDataGenerator\Model\RuntimeCacheCleaner">
+        <arguments>
+            <argument name="services" xsi:type="array">
+                <item name="quoteRepository" xsi:type="object">Magento\Quote\Model\QuoteRepository</item>
+                <item name="orderRepository" xsi:type="object">Magento\Sales\Model\OrderRepository</item>
+                <item name="orderItemRepository" xsi:type="object">Magento\Sales\Model\Order\ItemRepository</item>
+                <item name="productRepository" xsi:type="object">Magento\Catalog\Model\ProductRepository</item>
+                <item name="customerRegistry" xsi:type="object">Magento\Customer\Model\CustomerRegistry</item>
+                <item name="addressRegistry" xsi:type="object">Magento\Customer\Model\AddressRegistry</item>
+                <item name="entitySnapshot" xsi:type="object">Magento\Framework\Model\ResourceModel\Db\VersionControl\Snapshot</item>
+                <item name="productCategoryList" xsi:type="object">Magento\Catalog\Model\ProductCategoryList</item>
+                <item name="stockRegistryStorage" xsi:type="object">Magento\CatalogInventory\Model\StockRegistryStorage</item>
+                <item name="productTypesBySkus" xsi:type="object">Magento\InventoryCatalog\Model\Cache\ProductTypesBySkusStorage</item>
+                <item name="productIdsBySkus" xsi:type="object">Magento\InventoryCatalog\Model\Cache\ProductIdsBySkusStorage</item>
+                <item name="productSkusByIds" xsi:type="object">Magento\InventoryCatalog\Model\Cache\ProductSkusByIdsStorage</item>
+                <item name="legacyStockItems" xsi:type="object">Magento\InventoryConfiguration\Model\LegacyStockItem\CacheStorage</item>
+                <item name="salesRuleValidator" xsi:type="object">Magento\SalesRule\Model\Validator</item>
+                <item name="freeShippingCalculator" xsi:type="object">Magento\OfflineShipping\Model\SalesRule\Calculator</item>
+                <item name="taxCalculation" xsi:type="object">Magento\Tax\Model\ResourceModel\Calculation</item>
+            </argument>
+            <argument name="caches" xsi:type="array">
+                <item name="invoiceRepository" xsi:type="array">
+                    <item name="object" xsi:type="object">Magento\Sales\Model\Order\InvoiceRepository</item>
+                    <item name="property" xsi:type="string">registry</item>
+                </item>
+                <item name="shipmentRepository" xsi:type="array">
+                    <item name="object" xsi:type="object">Magento\Sales\Model\Order\ShipmentRepository</item>
+                    <item name="property" xsi:type="string">registry</item>
+                </item>
+                <item name="creditmemoRepository" xsi:type="array">
+                    <item name="object" xsi:type="object">Magento\Sales\Model\Order\CreditmemoRepository</item>
+                    <item name="property" xsi:type="string">registry</item>
+                </item>
+                <item name="rulePricesStorage" xsi:type="array">
+                    <item name="object" xsi:type="object">Magento\CatalogRule\Observer\RulePricesStorage</item>
+                    <item name="property" xsi:type="string">rulePrices</item>
+                </item>
+                <item name="quoteItemQtyList" xsi:type="array">
+                    <item name="object" xsi:type="object">Magento\CatalogInventory\Model\Quote\Item\QuantityValidator\QuoteItemQtyList</item>
+                    <item name="property" xsi:type="string">_checkedQuoteItems</item>
+                </item>
+            </argument>
+        </arguments>
+    </type>
+    <type name="Perspective\SalesDataGenerator\Model\StatisticsRefresher">
+        <arguments>
+            <argument name="reports" xsi:type="array">
+                <item name="sales" xsi:type="object">Magento\Sales\Model\ResourceModel\Report\Order</item>
+                <item name="tax" xsi:type="object">Magento\Tax\Model\ResourceModel\Report\Tax</item>
+                <item name="shipping" xsi:type="object">Magento\Sales\Model\ResourceModel\Report\Shipping</item>
+                <item name="invoiced" xsi:type="object">Magento\Sales\Model\ResourceModel\Report\Invoiced</item>
+                <item name="refunded" xsi:type="object">Magento\Sales\Model\ResourceModel\Report\Refunded</item>
+                <item name="coupons" xsi:type="object">Magento\SalesRule\Model\ResourceModel\Report\Rule</item>
+                <item name="bestsellers" xsi:type="object">Magento\Sales\Model\ResourceModel\Report\Bestsellers</item>
+            </argument>
+        </arguments>
+    </type>
+    <virtualType name="Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\PaymentMethods"
+                 type="Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\WeightedOptions">
+        <arguments>
+            <argument name="optionSource" xsi:type="object">Perspective\SalesDataGenerator\Model\Config\Source\PaymentMethods</argument>
+            <argument name="optionLabel" xsi:type="string">Payment Method</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\ShippingMethods"
+                 type="Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\WeightedOptions">
+        <arguments>
+            <argument name="optionSource" xsi:type="object">Perspective\SalesDataGenerator\Model\Config\Source\ShippingMethods</argument>
+            <argument name="optionLabel" xsi:type="string">Shipping Method</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\OrderStatuses"
+                 type="Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\WeightedOptions">
+        <arguments>
+            <argument name="optionSource" xsi:type="object">Perspective\SalesDataGenerator\Model\Config\Source\OrderStatuses</argument>
+            <argument name="optionLabel" xsi:type="string">Order Status</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Perspective\SalesDataGenerator\Model\Config\Backend\PaymentMethods"
+                 type="Perspective\SalesDataGenerator\Model\Config\Backend\WeightedOptions">
+        <arguments>
+            <argument name="optionSource" xsi:type="object">Perspective\SalesDataGenerator\Model\Config\Source\PaymentMethods</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Perspective\SalesDataGenerator\Model\Config\Backend\ShippingMethods"
+                 type="Perspective\SalesDataGenerator\Model\Config\Backend\WeightedOptions">
+        <arguments>
+            <argument name="optionSource" xsi:type="object">Perspective\SalesDataGenerator\Model\Config\Source\ShippingMethods</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Perspective\SalesDataGenerator\Model\Config\Backend\OrderStatuses"
+                 type="Perspective\SalesDataGenerator\Model\Config\Backend\WeightedOptions">
+        <arguments>
+            <argument name="optionSource" xsi:type="object">Perspective\SalesDataGenerator\Model\Config\Source\OrderStatuses</argument>
+        </arguments>
+    </virtualType>
+</config>
