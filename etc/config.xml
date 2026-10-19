@@ -11,6 +11,7 @@
             <generation>
                 <batch_size>100</batch_size>
                 <workers>1</workers>
+                <catalog_segment_size>500</catalog_segment_size>
             </generation>
         </sales_data_generator>
     </default>

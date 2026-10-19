@@ -19,8 +19,10 @@ use Perspective\SalesDataGenerator\Model\CatalogGenerator;
 use Perspective\SalesDataGenerator\Model\Config;
 use Perspective\SalesDataGenerator\Model\CustomerGenerator;
 use Perspective\SalesDataGenerator\Model\CustomerLocator;
+use Perspective\SalesDataGenerator\Model\DeadlockRetry;
 use Perspective\SalesDataGenerator\Model\GenerationContext;
 use Perspective\SalesDataGenerator\Model\Job;
+use Perspective\SalesDataGenerator\Model\JobCategoryCreator;
 use Perspective\SalesDataGenerator\Model\JobFactory;
 use Perspective\SalesDataGenerator\Model\OrderGenerator;
 use Perspective\SalesDataGenerator\Model\ProductPool;
@@ -29,10 +31,12 @@ use Perspective\SalesDataGenerator\Model\RuntimeCacheCleaner;
 use Perspective\SalesDataGenerator\Model\ResourceModel\Backdater;
 use Perspective\SalesDataGenerator\Model\ResourceModel\GeneratedEntities;
 use Perspective\SalesDataGenerator\Model\ResourceModel\Job as JobResource;
+use Perspective\SalesDataGenerator\Model\ResourceModel\JobCategory;
 use Perspective\SalesDataGenerator\Model\ResourceModel\Segment;
 use Perspective\SalesDataGenerator\Model\StatisticsRefresher;
 use Perspective\SalesDataGenerator\Model\StoreContext;
 use Perspective\SalesDataGenerator\Model\Timeline;
+use Psr\Log\LoggerInterface;
 
 /**
  * Runs one batch of a job: claims ready segments in order (catalog first, then customers and orders by day)
@@ -55,6 +59,13 @@ class Processor
      * @var int
      */
     private int $sinceCacheClean = 0;
+
+    /**
+     * Jobs whose category positions were looked up by URL key in this process.
+     *
+     * @var array<int, true>
+     */
+    private array $backfilledJobs = [];
 
     public function __construct(
         private readonly JobFactory $jobFactory,
@@ -81,6 +92,10 @@ class Processor
         private readonly LockManagerInterface $lockManager,
         private readonly State $appState,
         private readonly Json $json,
+        private readonly JobCategory $jobCategory,
+        private readonly JobCategoryCreator $jobCategoryCreator,
+        private readonly DeadlockRetry $deadlockRetry,
+        private readonly LoggerInterface $logger,
         private readonly int $cleanCachesEvery = 20
     ) {
     }
@@ -101,6 +116,16 @@ class Processor
                 fn (): bool => $this->generationContext->run(fn (): bool => $this->runBatch($jobId, $onProgress))
             );
         } catch (\Throwable $e) {
+            if ($this->deadlockRetry->isLockConflict($e)) {
+                // E.g. an indexer holding catalog tables longer than the retries wait. The chain goes on and
+                // the unfinished segment is taken again; what the batch created is found by its tag.
+                $this->logger->warning(
+                    sprintf('Job #%d, pid %d: batch postponed: %s', $jobId, getmypid(), $e->getMessage())
+                );
+                // phpcs:ignore Magento2.Functions.DiscouragedFunction
+                sleep(self::WAIT_SECONDS);
+                return true;
+            }
             $this->jobResource->updateColumns($jobId, [Job::ERROR => $e->getMessage()]);
             throw $e;
         } finally {
@@ -122,7 +147,7 @@ class Processor
         }
         $parameters = Parameters::fromArray($this->json->unserialize((string)$job->getData(Job::PARAMETERS)));
 
-        $segment = $this->claimSegment($jobId);
+        $segment = $this->claimSegment($jobId, $parameters);
         if ($segment === null) {
             if (!$this->segmentResource->hasUnfinished($jobId)) {
                 $this->finish($job, $parameters);
@@ -138,13 +163,29 @@ class Processor
         $timezone = $this->storeContext->getTimezone($parameters->storeId);
         $budget = $this->config->getBatchSize();
         $ordersPrepared = false;
+        $startedAt = microtime(true);
+        $processedByType = [];
         // Small days are processed together, so a batch is not mostly setup.
         while ($segment !== null) {
             try {
                 if ($segment['type'] === Segment::TYPE_CATEGORY) {
-                    $processed = $this->createCategories($segment, $store, $parameters, $budget, $onProgress);
+                    $processed = $this->createCategories(
+                        $jobId,
+                        $segment,
+                        $store,
+                        $parameters,
+                        $budget,
+                        $onProgress
+                    );
                 } elseif ($segment['type'] === Segment::TYPE_PRODUCT) {
-                    $processed = $this->createProducts($segment, $store, $parameters, $budget, $onProgress);
+                    $processed = $this->createProducts(
+                        $jobId,
+                        $segment,
+                        $store,
+                        $parameters,
+                        $budget,
+                        $onProgress
+                    );
                 } elseif ($segment['type'] === Segment::TYPE_CUSTOMER) {
                     $processed = $this->registerCustomers(
                         $jobId,
@@ -184,14 +225,40 @@ class Processor
                 );
             }
             $budget -= $processed;
+            $processedByType[$segment['type']] = ($processedByType[$segment['type']] ?? 0) + $processed;
             $this->jobResource->updateColumns($jobId, [
                 Job::HEARTBEAT_AT => $this->now(),
                 Job::RESUME_COUNT => 0,
             ]);
-            $segment = $budget > 0 ? $this->claimSegment($jobId) : null;
+            $segment = $budget > 0 ? $this->claimSegment($jobId, $parameters) : null;
         }
+        $this->logBatch($jobId, $processedByType, $startedAt);
 
         return true;
+    }
+
+    /**
+     * Log what a batch processed, how long it took and the worker's memory, to tune batch sizes.
+     *
+     * @param int $jobId
+     * @param array<string, int> $processedByType
+     * @param float $startedAt
+     */
+    private function logBatch(int $jobId, array $processedByType, float $startedAt): void
+    {
+        $processed = [];
+        foreach ($processedByType as $type => $count) {
+            $processed[] = $type . ' ' . $count;
+        }
+        $this->logger->info(sprintf(
+            'Job #%d, pid %d: %s in %.1f s; memory %.1f MB, peak %.1f MB',
+            $jobId,
+            getmypid(),
+            implode(', ', $processed),
+            microtime(true) - $startedAt,
+            memory_get_usage() / 1048576,
+            memory_get_peak_usage() / 1048576
+        ));
     }
 
     /**
@@ -199,9 +266,14 @@ class Processor
      *
      * @return SegmentRow|null
      */
-    private function claimSegment(int $jobId): ?array
+    private function claimSegment(int $jobId, Parameters $parameters): ?array
     {
-        foreach ($this->segmentResource->getUnfinished($jobId, self::CANDIDATES) as $candidate) {
+        $candidates = $this->segmentResource->getUnfinished(
+            $jobId,
+            self::CANDIDATES,
+            $this->getNotReadyFrom($jobId, $parameters)
+        );
+        foreach ($candidates as $candidate) {
             if (!$this->isReady($jobId, $candidate)) {
                 continue;
             }
@@ -221,8 +293,30 @@ class Processor
     }
 
     /**
-     * Products wait for the categories they are assigned to; orders wait for the whole catalog
-     * and for every customer registered up to their day.
+     * Segments that cannot start yet whatever their day: categories other than departments wait for every
+     * department, products for every category, and orders for the whole catalog.
+     *
+     * @return array<string, int> type => first position from which its segments are not ready
+     */
+    private function getNotReadyFrom(int $jobId, Parameters $parameters): array
+    {
+        $departments = CatalogGenerator::departmentCount($parameters->categories);
+        $notReadyFrom = [];
+        if (!$this->segmentResource->isDoneBefore($jobId, Segment::TYPE_CATEGORY, $departments)) {
+            $notReadyFrom[Segment::TYPE_CATEGORY] = $departments;
+        }
+        if (!$this->segmentResource->areDone($jobId, [Segment::TYPE_CATEGORY])) {
+            $notReadyFrom[Segment::TYPE_PRODUCT] = 0;
+            $notReadyFrom[Segment::TYPE_ORDER] = 0;
+        } elseif (!$this->segmentResource->areDone($jobId, [Segment::TYPE_PRODUCT])) {
+            $notReadyFrom[Segment::TYPE_ORDER] = 0;
+        }
+
+        return $notReadyFrom;
+    }
+
+    /**
+     * Orders also wait for every customer registered up to their day.
      *
      * @param int $jobId
      * @param SegmentRow $segment
@@ -230,19 +324,14 @@ class Processor
      */
     private function isReady(int $jobId, array $segment): bool
     {
-        return match ($segment['type']) {
-            Segment::TYPE_PRODUCT => $this->segmentResource->areDone($jobId, [Segment::TYPE_CATEGORY]),
-            Segment::TYPE_ORDER => $this->segmentResource->areDone(
-                $jobId,
-                [Segment::TYPE_CATEGORY, Segment::TYPE_PRODUCT]
-            ) && $this->segmentResource->areCustomersDoneUntil($jobId, $segment['day']),
-            default => true,
-        };
+        return $segment['type'] !== Segment::TYPE_ORDER
+            || $this->segmentResource->areCustomersDoneUntil($jobId, $segment['day']);
     }
 
     /**
      * Create planned categories: departments under the store root first, then the others under them.
      *
+     * @param int $jobId
      * @param SegmentRow $segment
      * @param StoreInterface $store
      * @param Parameters $parameters
@@ -251,6 +340,7 @@ class Processor
      * @return int categories processed
      */
     private function createCategories(
+        int $jobId,
         array $segment,
         StoreInterface $store,
         Parameters $parameters,
@@ -259,25 +349,41 @@ class Processor
     ): int {
         $token = (string)$parameters->token;
         $rootId = $this->storeContext->getRootCategoryId((int)$store->getId());
-        $departments = CatalogGenerator::departmentCount($segment['planned_count']);
-        // Also the categories created before an interruption, so they are neither repeated nor orphaned.
-        $created = $this->generatedEntities->getJobCategoryIds($token);
+        $departments = CatalogGenerator::departmentCount($parameters->categories);
         $count = min($budget, $segment['planned_count'] - $segment['done_count']);
+        $positions = range(
+            $segment['first_position'] + $segment['done_count'],
+            $segment['first_position'] + $segment['done_count'] + $count - 1
+        );
+        // Also the categories created before an interruption, so they are neither repeated nor orphaned.
+        $created = $this->jobCategory->getRange($jobId, $positions[0], $positions[$count - 1]);
+        $parentIds = $this->categoryIds($jobId, $token, array_values(array_unique(array_map(
+            static fn (int $position): int => $position % $departments,
+            array_filter($positions, static fn (int $position): bool => $position >= $departments)
+        ))));
 
         $this->storeContext->activateAdmin();
         try {
-            for ($index = 0; $index < $count; $index++) {
-                $position = $segment['first_position'] + $segment['done_count'] + $index;
+            foreach ($positions as $position) {
                 if (!isset($created[$position])) {
                     $isDepartment = $position < $departments;
-                    $this->random->seed(Random::seedFor((int)$parameters->seed, Segment::TYPE_CATEGORY, $position));
-                    $created[$position] = (int)$this->catalogGenerator->createCategory(
+                    // A job planned before departments got segments of their own creates them in this batch.
+                    $parentId = $isDepartment
+                        ? $rootId
+                        : ($created[$position % $departments] ?? $parentIds[$position % $departments] ?? null);
+                    if ($parentId === null) {
+                        throw new \RuntimeException(
+                            sprintf('Category at position %d was not found.', $position % $departments)
+                        );
+                    }
+                    $created[$position] = $this->jobCategoryCreator->create(
+                        $jobId,
                         $token,
                         (int)$parameters->seed,
                         $position,
-                        $isDepartment ? $rootId : $created[$position % $departments],
+                        $parentId,
                         $isDepartment
-                    )->getId();
+                    );
                 }
                 $this->afterEntity($onProgress);
             }
@@ -293,6 +399,7 @@ class Processor
     /**
      * Create planned simple products in the job's categories, skipping those created before an interruption.
      *
+     * @param int $jobId
      * @param SegmentRow $segment
      * @param StoreInterface $store
      * @param Parameters $parameters
@@ -301,6 +408,7 @@ class Processor
      * @return int products processed
      */
     private function createProducts(
+        int $jobId,
         array $segment,
         StoreInterface $store,
         Parameters $parameters,
@@ -308,22 +416,34 @@ class Processor
         ?callable $onProgress
     ): int {
         $token = (string)$parameters->token;
-        $categoryIds = array_values($this->generatedEntities->getJobCategoryIds($token));
         $count = min($budget, $segment['planned_count'] - $segment['done_count']);
+        $categoryIds = fn (array $positions): array => $this->categoryIds($jobId, $token, $positions);
 
         $this->storeContext->activateAdmin();
         try {
             for ($index = 0; $index < $count; $index++) {
                 $position = $segment['first_position'] + $segment['done_count'] + $index;
-                if ($this->generatedEntities->findProductIdBySku(CatalogGenerator::sku($token, $position)) === null) {
+                $this->deadlockRetry->execute(function () use (
+                    $token,
+                    $position,
+                    $store,
+                    $parameters,
+                    $categoryIds
+                ): void {
+                    // Also on a repeated attempt, in case the failure came after the product was saved.
+                    $sku = CatalogGenerator::sku($token, $position);
+                    if ($this->generatedEntities->findProductIdBySku($sku) !== null) {
+                        return;
+                    }
                     $this->random->seed(Random::seedFor((int)$parameters->seed, Segment::TYPE_PRODUCT, $position));
                     $this->catalogGenerator->createProduct(
                         $token,
                         $position,
                         (int)$store->getWebsiteId(),
+                        $parameters->categories,
                         $categoryIds
                     );
-                }
+                });
                 $this->afterEntity($onProgress);
             }
         } finally {
@@ -333,6 +453,27 @@ class Processor
         $this->segmentResource->update($segment['segment_id'], ['done_count' => $segment['done_count'] + $count]);
 
         return $count;
+    }
+
+    /**
+     * Category IDs of the job at the given positions. Jobs planned before the positions were recorded
+     * have their categories looked up by URL key, once per process.
+     *
+     * @param int $jobId
+     * @param string $token
+     * @param list<int> $positions
+     * @return array<int, int> category ID by position; deleted categories are left out
+     */
+    private function categoryIds(int $jobId, string $token, array $positions): array
+    {
+        $ids = $this->jobCategory->getIds($jobId, $positions);
+        if (count($ids) < count(array_unique($positions)) && !isset($this->backfilledJobs[$jobId])) {
+            $this->jobCategory->saveMultiple($jobId, $this->generatedEntities->getJobCategoryIds($token));
+            $this->backfilledJobs[$jobId] = true;
+            $ids = $this->jobCategory->getIds($jobId, $positions);
+        }
+
+        return $ids;
     }
 
     /**

@@ -37,6 +37,7 @@
                 <item name="orderRepository" xsi:type="object">Magento\Sales\Model\OrderRepository</item>
                 <item name="orderItemRepository" xsi:type="object">Magento\Sales\Model\Order\ItemRepository</item>
                 <item name="productRepository" xsi:type="object">Magento\Catalog\Model\ProductRepository</item>
+                <item name="categoryRepository" xsi:type="object">Magento\Catalog\Model\CategoryRepository</item>
                 <item name="customerRegistry" xsi:type="object">Magento\Customer\Model\CustomerRegistry</item>
                 <item name="addressRegistry" xsi:type="object">Magento\Customer\Model\AddressRegistry</item>
                 <item name="entitySnapshot" xsi:type="object">Magento\Framework\Model\ResourceModel\Db\VersionControl\Snapshot</item>
@@ -126,4 +127,22 @@
             <argument name="optionSource" xsi:type="object">Perspective\SalesDataGenerator\Model\Config\Source\OrderStatuses</argument>
         </arguments>
     </virtualType>
+    <virtualType name="Perspective\SalesDataGenerator\Logger\Handler" type="Magento\Framework\Logger\Handler\Base">
+        <arguments>
+            <argument name="fileName" xsi:type="string">/var/log/sales_data_generator.log</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Perspective\SalesDataGenerator\Logger" type="Monolog\Logger">
+        <arguments>
+            <argument name="name" xsi:type="string">sales_data_generator</argument>
+            <argument name="handlers" xsi:type="array">
+                <item name="system" xsi:type="object">Perspective\SalesDataGenerator\Logger\Handler</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <type name="Perspective\SalesDataGenerator\Model\Job\Processor">
+        <arguments>
+            <argument name="logger" xsi:type="object">Perspective\SalesDataGenerator\Logger</argument>
+        </arguments>
+    </type>
 </config>

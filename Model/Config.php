@@ -20,6 +20,8 @@ class Config
     private const string XML_PATH_BATCH_SIZE = 'sales_data_generator/generation/batch_size';
     private const int DEFAULT_BATCH_SIZE = 100;
     private const string XML_PATH_WORKERS = 'sales_data_generator/generation/workers';
+    private const string XML_PATH_CATALOG_SEGMENT_SIZE = 'sales_data_generator/generation/catalog_segment_size';
+    private const int DEFAULT_CATALOG_SEGMENT_SIZE = 500;
 
     public function __construct(
         private readonly ScopeConfigInterface $scopeConfig,
@@ -70,6 +72,16 @@ class Config
     public function getWorkers(): int
     {
         return max(1, (int)$this->scopeConfig->getValue(self::XML_PATH_WORKERS));
+    }
+
+    /**
+     * Categories or products per segment.
+     */
+    public function getCatalogSegmentSize(): int
+    {
+        $size = (int)$this->scopeConfig->getValue(self::XML_PATH_CATALOG_SEGMENT_SIZE);
+
+        return $size > 0 ? $size : self::DEFAULT_CATALOG_SEGMENT_SIZE;
     }
 
     /**

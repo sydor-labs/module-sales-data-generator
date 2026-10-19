@@ -51,15 +51,32 @@
         <constraint xsi:type="foreign" referenceId="PERSPECTIVE_SDG_SEGMENT_JOB_ID_SDG_JOB_JOB_ID"
                     table="perspective_sales_data_generator_segment" column="job_id"
                     referenceTable="perspective_sales_data_generator_job" referenceColumn="job_id" onDelete="CASCADE"/>
-        <constraint xsi:type="unique" referenceId="PERSPECTIVE_SALES_DATA_GENERATOR_SEGMENT_JOB_ID_TYPE_DAY">
+        <constraint xsi:type="unique" referenceId="PERSPECTIVE_SDG_SEGMENT_JOB_ID_TYPE_DAY_FIRST_POSITION">
             <column name="job_id"/>
             <column name="type"/>
             <column name="day"/>
+            <column name="first_position"/>
         </constraint>
         <index referenceId="PERSPECTIVE_SALES_DATA_GENERATOR_SEGMENT_JOB_ID_DAY_TYPE" indexType="btree">
             <column name="job_id"/>
             <column name="day"/>
             <column name="type"/>
         </index>
+    </table>
+    <table name="perspective_sales_data_generator_category" resource="default" engine="innodb"
+           comment="Sales Data Generator: job categories">
+        <column xsi:type="int" name="job_id" unsigned="true" nullable="false" comment="Job ID"/>
+        <column xsi:type="int" name="position" unsigned="true" nullable="false" comment="Planned category position"/>
+        <column xsi:type="int" name="category_id" unsigned="true" nullable="false" comment="Category ID"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="job_id"/>
+            <column name="position"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PERSPECTIVE_SDG_CATEGORY_JOB_ID_SDG_JOB_JOB_ID"
+                    table="perspective_sales_data_generator_category" column="job_id"
+                    referenceTable="perspective_sales_data_generator_job" referenceColumn="job_id" onDelete="CASCADE"/>
+        <constraint xsi:type="foreign" referenceId="PERSPECTIVE_SDG_CATEGORY_CATEGORY_ID_CATALOG_CATEGORY_ENTITY_ENTITY_ID"
+                    table="perspective_sales_data_generator_category" column="category_id"
+                    referenceTable="catalog_category_entity" referenceColumn="entity_id" onDelete="CASCADE"/>
     </table>
 </schema>

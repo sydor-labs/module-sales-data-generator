@@ -8,6 +8,8 @@ use DateInterval;
 use DateTimeImmutable;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Serialize\Serializer\Json;
+use Perspective\SalesDataGenerator\Model\CatalogGenerator;
+use Perspective\SalesDataGenerator\Model\Config;
 use Perspective\SalesDataGenerator\Model\Job;
 use Perspective\SalesDataGenerator\Model\JobFactory;
 use Perspective\SalesDataGenerator\Model\ResourceModel\Job as JobResource;
@@ -33,6 +35,7 @@ class Planner
         private readonly Timeline $timeline,
         private readonly StoreContext $storeContext,
         private readonly Validator $validator,
+        private readonly Config $config,
         private readonly Json $json
     ) {
     }
@@ -89,20 +92,26 @@ class Planner
         $connection->beginTransaction();
         try {
             $this->jobResource->save($job);
+            $segmentSize = $this->config->getCatalogSegmentSize();
             if ($parameters->categories > 0) {
-                $this->segmentResource->insertDays(
+                // Departments get segments of their own: the other categories need them as parents.
+                $departments = CatalogGenerator::departmentCount($parameters->categories);
+                $this->segmentResource->insertRanges(
                     (int)$job->getId(),
                     Segment::TYPE_CATEGORY,
-                    [$catalogDay => $parameters->categories]
+                    $catalogDay,
+                    [
+                        ...$this->ranges(0, $departments, $segmentSize),
+                        ...$this->ranges($departments, $parameters->categories, $segmentSize),
+                    ]
                 );
             }
-            if ($parameters->products > 0) {
-                $this->segmentResource->insertDays(
-                    (int)$job->getId(),
-                    Segment::TYPE_PRODUCT,
-                    [$catalogDay => $parameters->products]
-                );
-            }
+            $this->segmentResource->insertRanges(
+                (int)$job->getId(),
+                Segment::TYPE_PRODUCT,
+                $catalogDay,
+                $this->ranges(0, $parameters->products, $segmentSize)
+            );
             $this->segmentResource->insertDays((int)$job->getId(), Segment::TYPE_CUSTOMER, $customerDays);
             $this->segmentResource->insertDays((int)$job->getId(), Segment::TYPE_ORDER, $orderDays);
             $connection->commit();
@@ -112,5 +121,20 @@ class Planner
         }
 
         return $job;
+    }
+
+    /**
+     * Split positions [$from, $to) into consecutive ranges of at most $size.
+     *
+     * @return list<array{0: int, 1: int}> first position and count of each range
+     */
+    private function ranges(int $from, int $to, int $size): array
+    {
+        $ranges = [];
+        for ($first = $from; $first < $to; $first += $size) {
+            $ranges[] = [$first, min($size, $to - $first)];
+        }
+
+        return $ranges;
     }
 }

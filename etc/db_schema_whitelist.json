@@ -4,13 +4,8 @@
             "job_id": true,
             "status": true,
             "parameters": true,
-            "plan": true,
-            "customer_ids": true,
             "customers_total": true,
-            "customers_done": true,
             "orders_total": true,
-            "orders_done": true,
-            "orders_failed": true,
             "summary": true,
             "error": true,
             "resume_count": true,
@@ -44,8 +39,21 @@
         },
         "constraint": {
             "PRIMARY": true,
-            "FK_3D7FF347A06DAA8C4331C96FCE3AF56C": true,
-            "PERSPECTIVE_SALES_DATA_GENERATOR_SEGMENT_JOB_ID_TYPE_DAY": true
+            "FK_1F62C67C5DDB51B98F65E2B43F17A928": true,
+            "PERSPECTIVE_SALES_DATA_GENERATOR_SEGMENT_JOB_ID_TYPE_DAY": true,
+            "UNQ_4D9C8E839787C8AC83FF9661AAF08DE8": true
+        }
+    },
+    "perspective_sales_data_generator_category": {
+        "column": {
+            "job_id": true,
+            "position": true,
+            "category_id": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "FK_04E1C55FE21D0B062948DB148E9FDB82": true,
+            "FK_B6BEF0FDAAAC4C3BEC8A5CD9E3273F30": true
         }
     }
 }

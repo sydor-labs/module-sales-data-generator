@@ -60,20 +60,56 @@ class Segment
     }
 
     /**
-     * Unfinished segments in processing order: by day, then by type. Catalog segments are planned for
-     * the day before the first customer, so they come first; categories sort before products.
+     * Insert segments of one type and day, each covering a range of positions.
      *
+     * @param int $jobId
+     * @param string $type
+     * @param string $day Y-m-d
+     * @param list<array{0: int, 1: int}> $ranges first position and count of each segment, ascending
+     */
+    public function insertRanges(int $jobId, string $type, string $day, array $ranges): void
+    {
+        $rows = [];
+        foreach ($ranges as [$firstPosition, $count]) {
+            $rows[] = [
+                'job_id' => $jobId,
+                'type' => $type,
+                'day' => $day,
+                'planned_count' => $count,
+                'first_position' => $firstPosition,
+            ];
+            if (count($rows) >= self::INSERT_CHUNK) {
+                $this->getConnection()->insertMultiple($this->getTable(), $rows);
+                $rows = [];
+            }
+        }
+        if ($rows !== []) {
+            $this->getConnection()->insertMultiple($this->getTable(), $rows);
+        }
+    }
+
+    /**
+     * Unfinished segments in processing order: by day, then by type and position. Catalog segments are
+     * planned for the day before the first customer, so they come first; categories sort before products.
+     *
+     * @param int $jobId
+     * @param int $limit
+     * @param array<string, int> $notReadyFrom type => first position from which its segments cannot start yet;
+     *     left out, so they do not crowd out the segments that can
      * @return list<SegmentRow>
      */
-    public function getUnfinished(int $jobId, int $limit): array
+    public function getUnfinished(int $jobId, int $limit, array $notReadyFrom = []): array
     {
         $connection = $this->getConnection();
         $select = $connection->select()
             ->from($this->getTable())
             ->where('job_id = ?', $jobId)
             ->where('done_count < planned_count')
-            ->order(['day ASC', 'type ASC'])
+            ->order(['day ASC', 'type ASC', 'first_position ASC'])
             ->limit($limit);
+        foreach ($notReadyFrom as $type => $position) {
+            $select->where('type <> ? OR first_position < ' . (int)$position, $type);
+        }
 
         return array_map([$this, 'normalize'], $connection->fetchAll($select));
     }
@@ -125,6 +161,24 @@ class Segment
                 ->from($this->getTable(), ['segment_id'])
                 ->where('job_id = ?', $jobId)
                 ->where('type IN (?)', $types)
+                ->where('done_count < planned_count')
+                ->limit(1)
+        );
+    }
+
+    /**
+     * Whether every segment of a type starting before a position is finished.
+     */
+    public function isDoneBefore(int $jobId, string $type, int $position): bool
+    {
+        $connection = $this->getConnection();
+
+        return !$connection->fetchOne(
+            $connection->select()
+                ->from($this->getTable(), ['segment_id'])
+                ->where('job_id = ?', $jobId)
+                ->where('type = ?', $type)
+                ->where('first_position < ?', $position)
                 ->where('done_count < planned_count')
                 ->limit(1)
         );

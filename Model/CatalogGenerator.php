@@ -131,12 +131,18 @@ class CatalogGenerator
      * @param string $token
      * @param int $position
      * @param int $websiteId
-     * @param list<int> $categoryIds categories to choose from; empty leaves the product without one
+     * @param int $categoryCount positions of the job's categories to choose from; 0 leaves the product without one
+     * @param callable(list<int>): array<int, int> $categoryIds category IDs by position; deleted ones are left out
      * @return ProductInterface
      * @throws LocalizedException
      */
-    public function createProduct(string $token, int $position, int $websiteId, array $categoryIds): ProductInterface
-    {
+    public function createProduct(
+        string $token,
+        int $position,
+        int $websiteId,
+        int $categoryCount,
+        callable $categoryIds
+    ): ProductInterface {
         $name = sprintf(
             '%s %s %s',
             $this->random->pick(self::ADJECTIVES),
@@ -164,12 +170,20 @@ class CatalogGenerator
             'tax_class_id',
             (int)$this->scopeConfig->getValue(self::XML_PATH_DEFAULT_TAX_CLASS)
         );
-        if ($categoryIds !== []) {
-            $assigned = [$this->random->pick($categoryIds)];
-            if (count($categoryIds) > 1 && $this->random->chance(0.3)) {
-                $assigned[] = $this->random->pick($categoryIds);
+        if ($categoryCount > 0) {
+            // Positions are drawn like an element of the ordered ID list, so the IDs need not be loaded.
+            $positions = [$this->random->int(0, $categoryCount - 1)];
+            if ($categoryCount > 1 && $this->random->chance(0.3)) {
+                $positions[] = $this->random->int(0, $categoryCount - 1);
             }
-            $product->setCategoryIds(array_values(array_unique($assigned)));
+            $positions = array_values(array_unique($positions));
+            $ids = $categoryIds($positions);
+            $assigned = array_values(array_filter(
+                array_map(static fn (int $categoryPosition): ?int => $ids[$categoryPosition] ?? null, $positions)
+            ));
+            if ($assigned !== []) {
+                $product->setCategoryIds($assigned);
+            }
         }
 
         return $this->productRepository->save($product);

@@ -49,6 +49,12 @@
                     <validate>required-entry validate-digits validate-greater-than-zero</validate>
                     <comment><![CDATA[Message chains started per job. Run as many <code>salesDataGenerator</code> consumers to process them in parallel, manually or by cron with <code>cron_consumers_runner/multiple_processes</code> in <code>app/etc/env.php</code>.]]></comment>
                 </field>
+                <field id="catalog_segment_size" translate="label comment" type="text" sortOrder="17"
+                       showInDefault="1" canRestore="1">
+                    <label>Catalog Segment Size</label>
+                    <validate>required-entry validate-digits validate-greater-than-zero</validate>
+                    <comment>Categories or products in one segment of a new job. Different segments are created by workers in parallel.</comment>
+                </field>
                 <field id="generate" sortOrder="20" showInDefault="1">
                     <frontend_model>Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\GenerateButton</frontend_model>
                 </field>
