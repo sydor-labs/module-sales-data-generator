@@ -45,8 +45,9 @@
                 <field id="workers" translate="label comment" type="text" sortOrder="15" showInDefault="1"
                        canRestore="1">
                     <label>Parallel Workers</label>
+                    <frontend_model>Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\WorkersField</frontend_model>
                     <validate>required-entry validate-digits validate-greater-than-zero</validate>
-                    <comment><![CDATA[Message chains started per job. Run as many <code>salesDataGenerator</code> consumers to process them in parallel.]]></comment>
+                    <comment><![CDATA[Message chains started per job. Run as many <code>salesDataGenerator</code> consumers to process them in parallel, manually or by cron with <code>cron_consumers_runner/multiple_processes</code> in <code>app/etc/env.php</code>.]]></comment>
                 </field>
                 <field id="generate" sortOrder="20" showInDefault="1">
                     <frontend_model>Perspective\SalesDataGenerator\Block\Adminhtml\System\Config\GenerateButton</frontend_model>

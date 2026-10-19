@@ -2,5 +2,5 @@
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="urn:magento:framework-message-queue:etc/consumer.xsd">
     <consumer name="salesDataGenerator" queue="perspective.sales_data_generator.batch" connection="amqp"
-              handler="Perspective\SalesDataGenerator\Model\Queue\BatchConsumer::process"/>
+              handler="Perspective\SalesDataGenerator\Model\Queue\BatchConsumer::process" maxIdleTime="60"/>
 </config>
