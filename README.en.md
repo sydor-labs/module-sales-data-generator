@@ -40,6 +40,23 @@ that need a believable sales history.
 - Products that can be bought (e.g. Luma sample data), or catalog generation by the job itself
 - At least one active offline payment method (e.g. Check / Money order)
   and one active carrier (e.g. Flat Rate)
+- <a id="env-multiple-processes"></a>For parallel processing by cron, the number of consumer processes
+  in `app/etc/env.php` (by default cron starts only one `salesDataGenerator`); it should equal
+  **Parallel Workers**:
+
+  ```php
+  'cron_consumers_runner' => [
+      'cron_run' => true,
+      'multiple_processes' => [
+          'salesDataGenerator' => 4,
+      ],
+  ],
+  ```
+
+  If `cron_consumers_runner/consumers` lists consumers, `salesDataGenerator` must be in it.
+- CLI `memory_limit` unlimited (`-1`) or at least `512M` with the default settings. The exact value
+  depends on the number of consumers, Batch Size and catalog size, see
+  [Memory, speed and number of consumers](#memory-speed-and-number-of-consumers).
 
 ## Installation
 
@@ -106,6 +123,7 @@ How the settings are used:
 |---|---|---|
 | Batch Size | How many customers or orders one queue message processes | 100 |
 | Parallel Workers | How many message chains are started per job; parallel processing needs as many consumers | 1 |
+| Catalog Segment Size | How many categories or products one segment of a new job holds; different segments are created by workers in parallel | 500 |
 | Generate Sales Data... | Opens the page that starts a generation | — |
 
 ## Usage
@@ -124,9 +142,58 @@ and queues it, so a running consumer is needed to process it:
 bin/magento queue:consumers:start salesDataGenerator
 ```
 
-For parallel processing, start as many consumers as **Parallel Workers** is set to, for example
-in several terminals or with `--multi-process=1`, `--multi-process=2`, … Each consumer takes one
-message at a time, so they do not take work from each other.
+For parallel processing, as many consumers as **Parallel Workers** is set to must be running.
+Each consumer takes one message at a time, so they do not take work from each other. The module
+does not start consumers itself; there are two ways to do it:
+
+- **Manually** (in several terminals, by supervisor, etc.), one process per worker:
+
+  ```bash
+  bin/magento queue:consumers:start salesDataGenerator --multi-process=1
+  bin/magento queue:consumers:start salesDataGenerator --multi-process=2
+  ```
+
+- **By cron.** By default cron starts only one `salesDataGenerator` consumer, so set the number
+  of processes in `app/etc/env.php` as described in the [requirements](#env-multiple-processes).
+
+A consumer stops after 60 seconds without messages (`maxIdleTime` in `etc/queue_consumer.xml`),
+or at once if `consumers_wait_for_messages = 0` is set in `app/etc/env.php`. While the queue has
+messages, cron starts a new one in its place every minute, so the number of consumers running at once
+is the smaller of **Parallel Workers** and `multiple_processes`.
+
+#### Memory, speed and number of consumers
+
+Measured with Batch Size 100 on a store with 100 000 products:
+
+| Entity | PHP memory | Process memory (RSS) |
+|---|---|---|
+| Categories | ~105 MB | ~150 MB |
+| Products | ~125 MB | ~170 MB |
+| Customers | ~106 MB | ~160 MB |
+| Orders | ~196 MB, peak ~211 MB | ~265 MB |
+
+- Every 1000 products in the catalog add ~0.4 MB to a worker
+- Every extra 100 of Batch Size adds ~5 MB to a worker
+- Every product a worker creates adds ~0.2–0.3 KB (~25 MB per 100 000 products)
+
+Example: 10 consumers placing orders in such a store need about 10 × 265 MB ≈ 2.7 GB, plus
+the extra memory MySQL and OpenSearch take under that load.
+
+Last reference run: 5 consumers, Batch Size 500, Catalog Segment Size 500, 2000 categories,
+20 000 products, 20 000 customers and 20 000 orders over a year. It took ~18.5 minutes from job
+creation to **done**, of which cron took ~1 minute to start the consumers.
+
+Approximate time per 1000 entities with 5 consumers:
+
+| Entity | Time per 1000 | One worker, one entity |
+|---|---|---|
+| Categories | ~10–20 s | ~50–100 ms |
+| Products | ~7 s | ~35 ms |
+| Customers | ~15 s | ~70–80 ms |
+| Orders | ~25 s | ~120–130 ms |
+
+The real numbers of a run are in `var/log/sales_data_generator.log` (see below) and in
+`ps -eo pid,rss,args | grep "[q]ueue:consumers:start salesDataGenerator"`.
 
 #### Job statuses
 
@@ -203,62 +270,41 @@ bin/magento sales-data:resume <job_id> --queue  # through a consumer
 
 ## How it works
 
-1. **Planning** (`Model/Job/Planner`). The job parameters are saved together with a seed (random
-   if none is given), the planning time (cutoff, after which there are no events) and a unique token.
-   Customers and orders are spread over days, and only the count per day is written to the
-   `perspective_sales_data_generator_segment` table. For a year that is a few hundred rows,
-   whether there are a thousand orders or ten million.
-2. **Moments** (`Model/Timeline`). A day is split into hours, an hour into minutes, a minute into
-   seconds, each level with an exact total (systematic sampling) and noise. Any slice of a day's
-   sorted moments, e.g. positions 500 to 999 of 500 000, is rebuilt from the seed.
-3. **Processing** (`Model/Job/Processor`). The catalog first (categories, then products), then segments
-   by day, customers before orders. Products wait for categories, and a day's orders wait for the whole
-   catalog and for all customers up to that day. Each worker locks its segment, so several processes
-   work on one job without conflicts.
-4. **Buyers** (`Model/BuyerSelector`, `Model/CustomerLocator`). An order's buyer is picked by position
-   among the customers registered before the order time. Every tenth customer is loyal and buys more
-   often. Customer IDs are not stored: the customer's email is rebuilt from the seed and looked up
-   through the unique `(email, website_id)` index.
-5. **Backdating.** Magento sets the current time on save, so `created_at` and `updated_at` are
-   rewritten directly in the tables of customers, orders, items, quotes, status history, invoices,
-   shipments, credit memos and their grids.
-6. **Finishing.** The last worker that finds no work refreshes core report statistics (unless that
-   is disabled) and saves the job summary.
+A job is split into segments: categories and products by **Catalog Segment Size** positions, customers
+and orders by day. Processing goes in this order:
+
+departments → other categories → products → customers and orders by day
+
+Each worker takes a free segment, so different segments are processed in parallel. A segment can be
+processed once the segments it depends on are done:
+
+| Segment | Depends on |
+|---|---|
+| Departments | — |
+| Other categories | all departments |
+| Products | all categories |
+| Customers | — |
+| Orders of a day | the whole catalog and all customers registered up to that day |
 
 Stock management is turned off during generation (only for the generator process), so large runs
 do not stop when products sell out. Store settings are not changed.
 
-Every 20 customers or orders and at the end of a batch, the in-memory caches of Magento services are
-emptied (`Model/RuntimeCacheCleaner`, list in `di.xml`): quote, order, document and product repositories,
-customer registries, entity snapshots and so on. Otherwise a consumer's memory would grow by ~0.6 MB
-with every order. With the cleanup, a consumer peaks at about 130 MB of PHP memory regardless of job
-and batch size. The interval is set by the `cleanCachesEvery` argument of `Model/Job/Processor` in `di.xml`.
+After every batch, `var/log/sales_data_generator.log` gets what it processed, how long it took and the
+worker's memory, for example:
+
+```
+Job #12, pid 4242: customer 40, order 60 in 14.2 s; memory 88.4 MB, peak 131.0 MB
+```
 
 ### Recovery after a failure
 
-Progress is saved in segments after each part of a batch. Generated entities are marked with the
-job token, so an interrupted batch does not create duplicates:
-
-| Entity | Mark |
-|---|---|
-| Customer | email `firstname.lastname.<token>.<position>@example.com` |
-| Guest | email `firstname.lastname.<token>.<position>@example.org` |
-| Order | `sales_order.ext_order_id` = `sdg-<token>-<position>` |
-| Category | URL key `name-<token>-<position>` |
-| Product | SKU `sdg-<token>-<position>`, URL key `name-<token>-<position>` |
-
-When resuming, the generator checks what already exists in the database, not only the saved counter.
-
-A message chain can break, for example when a consumer is killed mid-batch or a debugger session
-is stopped while the consumer sat at a breakpoint. Magento treats a redelivered message as already
-processed (`queue_lock`) and discards it. The job then becomes **stalled**. It can be resumed:
+If a job is **stalled** or **failed**, it can be resumed:
 
 - with the **Resume** button in the admin or the `sales-data:resume` command;
 - automatically: the `perspective_sales_data_generator_watchdog` cron job (every 5 minutes) resumes
   jobs without progress for more than 10 minutes, including those whose start messages were lost
-  before the first batch. While the queue still has unread messages (consumers are busy or not
-  running), the watchdog resumes nothing. A job whose batch keeps failing with an error is marked
-  **failed** after 3 attempts without progress.
+  before the first batch. A job whose batch keeps failing with an error is marked **failed** after
+  3 attempts without progress.
 
 The watchdog works only when Magento cron is running.
 
@@ -295,7 +341,8 @@ Quotes of generated orders remain in the database.
 - Season factors are rough estimates, not measured values. Store growth is calculated within
   the job period (+50% from start to end).
 - Current prices and settings are used, not those in effect on the order date.
-- Speed is roughly 0.2 s per order per worker; millions of orders take days even with several workers.
+- Speed is roughly 0.12–0.13 s per order per worker, so a million orders take ~7 hours with 5 workers
+  and ~35 hours with one (see [Memory, speed and number of consumers](#memory-speed-and-number-of-consumers)).
 - A customer's email is rebuilt from the seed, so the name lists in `PersonGenerator` must not change
   until the job is finished (otherwise the customer lookup falls back to a slow method).
 - Orders found while resuming are not included in the job summary.

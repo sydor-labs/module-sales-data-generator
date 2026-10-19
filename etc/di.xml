@@ -50,6 +50,10 @@
                 <item name="salesRuleValidator" xsi:type="object">Magento\SalesRule\Model\Validator</item>
                 <item name="freeShippingCalculator" xsi:type="object">Magento\OfflineShipping\Model\SalesRule\Calculator</item>
                 <item name="taxCalculation" xsi:type="object">Magento\Tax\Model\ResourceModel\Calculation</item>
+                <item name="taxRateCalculation" xsi:type="object">Magento\Tax\Model\Calculation</item>
+                <item name="customerSnapshot" xsi:type="object">EavVersionControlSnapshot</item>
+                <item name="customerAddressSnapshot" xsi:type="object">CustomerAddressSnapshot</item>
+                <item name="customerSubscriberCache" xsi:type="object">Magento\Newsletter\Model\CustomerSubscriberCache</item>
             </argument>
             <argument name="caches" xsi:type="array">
                 <item name="invoiceRepository" xsi:type="array">

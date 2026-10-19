@@ -4,6 +4,18 @@ All notable changes to this module are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the module uses [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] - 2026-10-19
+
+### Fixed
+
+- Consumer memory grew with every customer and order, by about 5–10 KB each; it now stays at the
+  same level during a job.
+
+### Changed
+
+- README: memory, speed and number of consumers, and the `app/etc/env.php` settings for parallel
+  processing.
+
 ## [1.2.0] - 2026-10-19
 
 ### Added
